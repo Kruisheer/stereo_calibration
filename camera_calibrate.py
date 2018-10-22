@@ -1,11 +1,16 @@
+#To do add pickle support for faster processing
+#Forked from bvnayak/stereo_calibration
+#Added support for video and saving the parameters in YAML
+#For any questions on the code ask Gerard Kruisheer
 import numpy as np
 import cv2
 import glob
+import yaml
 import argparse
-
+import yaml
 
 class StereoCalibration(object):
-    def __init__(self, filepath):
+    def __init__(self): #, filepath):
         # termination criteria
         self.criteria = (cv2.TERM_CRITERIA_EPS +
                          cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
@@ -21,51 +26,79 @@ class StereoCalibration(object):
         self.imgpoints_l = []  # 2d points in image plane.
         self.imgpoints_r = []  # 2d points in image plane.
 
-        self.cal_path = filepath
-        self.read_images(self.cal_path)
+        #self.cal_path = filepath
+        self.read_images()#self.cal_path)
 
-    def read_images(self, cal_path):
-        images_right = glob.glob(cal_path + 'RIGHT/*.JPG')
-        images_left = glob.glob(cal_path + 'LEFT/*.JPG')
-        images_left.sort()
-        images_right.sort()
+    def read_images(self): #, cal_path):
+        print("location grids")
+        cap_right = cv2.VideoCapture('clip1.mp4')
+        cap_left  = cv2.VideoCapture('clip2.mp4')
 
-        for i, fname in enumerate(images_right):
-            img_l = cv2.imread(images_left[i])
-            img_r = cv2.imread(images_right[i])
+        #Sync the frames as close as possible
+        for i in range(1):
+            ret, right_image = cap_right.read()
 
-            gray_l = cv2.cvtColor(img_l, cv2.COLOR_BGR2GRAY)
-            gray_r = cv2.cvtColor(img_r, cv2.COLOR_BGR2GRAY)
 
-            # Find the chess board corners
-            ret_l, corners_l = cv2.findChessboardCorners(gray_l, (9, 6), None)
-            ret_r, corners_r = cv2.findChessboardCorners(gray_r, (9, 6), None)
+        for j in range(16):
+            ret, left_image = cap_left.read()
 
-            # If found, add object points, image points (after refining them)
-            self.objpoints.append(self.objp)
+        # images_right = glob.glob(cal_path + 'RIGHT/*.JPG')
+        # images_left = glob.glob(cal_path + 'LEFT/*.JPG')
 
-            if ret_l is True:
-                rt = cv2.cornerSubPix(gray_l, corners_l, (11, 11),
-                                      (-1, -1), self.criteria)
-                self.imgpoints_l.append(corners_l)
+        i = 0
+        # images_left.sort()
+        # images_right.sort()
 
-                # Draw and display the corners
-                ret_l = cv2.drawChessboardCorners(img_l, (9, 6),
-                                                  corners_l, ret_l)
-                cv2.imshow(images_left[i], img_l)
-                cv2.waitKey(500)
+        #for i, fname in enumerate(images_right):
+        for i in range(700):
+        #while(cap_left.isOpened() and cap_right.isOpened()):
+            if i % 20 == 0: #skip frames
+                ret, images_right = cap_right.read()
+                ret, images_left  = cap_left.read()
 
-            if ret_r is True:
-                rt = cv2.cornerSubPix(gray_r, corners_r, (11, 11),
-                                      (-1, -1), self.criteria)
-                self.imgpoints_r.append(corners_r)
+                gray_l = cv2.cvtColor(images_left, cv2.COLOR_BGR2GRAY)
+                gray_r = cv2.cvtColor(images_right, cv2.COLOR_BGR2GRAY)
 
-                # Draw and display the corners
-                ret_r = cv2.drawChessboardCorners(img_r, (9, 6),
-                                                  corners_r, ret_r)
-                cv2.imshow(images_right[i], img_r)
-                cv2.waitKey(500)
-            img_shape = gray_l.shape[::-1]
+                # Find the chess board corners
+                ret_l, corners_l = cv2.findChessboardCorners(gray_l, (9, 6), None)
+                ret_r, corners_r = cv2.findChessboardCorners(gray_r, (9, 6), None)
+
+                # If found, add object points, image points (after refining them)
+                self.objpoints.append(self.objp)
+
+                if ret_l is True:
+                    rt = cv2.cornerSubPix(gray_l, corners_l, (11, 11),
+                                          (-1, -1), self.criteria)
+                    self.imgpoints_l.append(corners_l)
+
+                    # Draw and display the corners
+                    # ret_l = cv2.drawChessboardCorners(img_l, (9, 6), corners_l, ret_l)
+                    ret_l = cv2.drawChessboardCorners(images_left, (9, 6), corners_l, ret_l)
+                    cv2.imshow("images_left", images_left)
+
+
+                if ret_r is True:
+                    rt = cv2.cornerSubPix(gray_r, corners_r, (11, 11),
+                                          (-1, -1), self.criteria)
+                    self.imgpoints_r.append(corners_r)
+
+                    # Draw and display the corners
+                    ret_r = cv2.drawChessboardCorners(images_right, (9, 6),
+                                                      corners_r, ret_r)
+                    cv2.imshow("images_right", images_right)
+                    #cv2.waitKey(500)
+
+                img_shape = gray_l.shape[::-1]
+                if cv2.waitKey(10) & 0xFF == ord('q'):
+                    cv2.destroyAllWindows()
+                    break
+
+            else:
+                ret, images_right  = cap_right.read()
+                ret, images_left  = cap_left.read()
+
+        cv2.destroyAllWindows()
+        print("Storing Calibration parameters")
 
         rt, self.M1, self.d1, self.r1, self.t1 = cv2.calibrateCamera(
             self.objpoints, self.imgpoints_l, img_shape, None, None)
@@ -75,6 +108,7 @@ class StereoCalibration(object):
         self.camera_model = self.stereo_calibrate(img_shape)
 
     def stereo_calibrate(self, dims):
+        print("Calibrating ...")
         flags = 0
         flags |= cv2.CALIB_FIX_INTRINSIC
         # flags |= cv2.CALIB_FIX_PRINCIPAL_POINT
@@ -118,12 +152,16 @@ class StereoCalibration(object):
                             ('dist2', d2), ('rvecs1', self.r1),
                             ('rvecs2', self.r2), ('R', R), ('T', T),
                             ('E', E), ('F', F)])
+        calibration_yaml = {'M1': M1.tolist(), 'M2': M2.tolist(), 'dist1': d1.tolist(), 'dist2': d2.tolist(), 'R': R.tolist(), 'T': T.tolist(), 'E': E.tolist(), 'F': F.tolist()}
+        
+        #cv2.destroyAllWindows()
 
-        cv2.destroyAllWindows()
+        with open('stereoCal.yaml', 'w') as fw:
+            yaml.dump(calibration_yaml, fw)
         return camera_model
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument('filepath', help='String Filepath')
-    args = parser.parse_args()
-    cal_data = StereoCalibration(args.filepath)
+    #parser = argparse.ArgumentParser()
+    #parser.add_argument('filepath', help='String Filepath')
+    #args = parser.parse_args()
+    cal_data = StereoCalibration()#args.filepath)
